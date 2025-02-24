@@ -1,10 +1,10 @@
 // Adapted for use with Adafruit_BusIO.
 // Modified from original code:
-// Copyright (c) Sandeep Mistry. All rights reserved.
+// Copyright (c) Sandeep Mistry and KISPE Space Systems Ltd. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full
 // license information.
 
-#include "Adafruit_MCP2515.h"
+#include "KISPE_MCP2515.h"
 
 #define REG_BFPCTRL 0x0c
 #define REG_TXRTSCTRL 0x0d
@@ -56,21 +56,21 @@
 #define FLAG_RXM0 0x20
 #define FLAG_RXM1 0x40
 
-Adafruit_MCP2515::Adafruit_MCP2515(int8_t cspin, SPIClass *theSPI)
+KISPE_MCP2515::KISPE_MCP2515(int8_t cspin, SPIClass *theSPI)
     : CANControllerClass(), _clockFrequency(MCP2515_DEFAULT_CLOCK_FREQUENCY) {
   spi_dev = new Adafruit_SPIDevice(cspin, 10e6, SPI_BITORDER_MSBFIRST,
                                    SPI_MODE0, theSPI);
 }
 
-Adafruit_MCP2515::Adafruit_MCP2515(int8_t cspin, int8_t mosipin, int8_t misopin,
+KISPE_MCP2515::KISPE_MCP2515(int8_t cspin, int8_t mosipin, int8_t misopin,
                                    int8_t sckpin)
     : CANControllerClass(), _clockFrequency(MCP2515_DEFAULT_CLOCK_FREQUENCY) {
   spi_dev = new Adafruit_SPIDevice(cspin, sckpin, misopin, mosipin, 10e6);
 }
 
-Adafruit_MCP2515::~Adafruit_MCP2515() {}
+KISPE_MCP2515::~KISPE_MCP2515() {}
 
-int Adafruit_MCP2515::begin(long baudRate) {
+int KISPE_MCP2515::begin(long baudRate) {
   CANControllerClass::begin(baudRate);
 
   if (!spi_dev->begin())
@@ -150,9 +150,9 @@ int Adafruit_MCP2515::begin(long baudRate) {
   return 1;
 }
 
-void Adafruit_MCP2515::end() { CANControllerClass::end(); }
+void KISPE_MCP2515::end() { CANControllerClass::end(); }
 
-int Adafruit_MCP2515::endPacket() {
+int KISPE_MCP2515::endPacket() {
   if (!CANControllerClass::endPacket()) {
     return 0;
   }
@@ -207,7 +207,7 @@ int Adafruit_MCP2515::endPacket() {
   return (readRegister(REG_TXBnCTRL(n)) & 0x70) ? 0 : 1;
 }
 
-int Adafruit_MCP2515::parsePacket() {
+int KISPE_MCP2515::parsePacket() {
   int n;
 
   uint8_t intf = readRegister(REG_CANINTF);
@@ -224,23 +224,31 @@ int Adafruit_MCP2515::parsePacket() {
     return 0;
   }
 
-  _rxExtended = (readRegister(REG_RXBnSIDL(n)) & FLAG_IDE) ? true : false;
+  uint8_t receiveRegisterBytes[13] = {0}; 
+  readAllReceiveRegisters(REG_RXBnSIDH(n), receiveRegisterBytes);
+  uint8_t iRXBnSIDHValue = receiveRegisterBytes[0];
+  uint8_t iRXBnSIDLValue = receiveRegisterBytes[1];
+  uint8_t iRXBnEID8Value = receiveRegisterBytes[2];
+  uint8_t iRXBnEID0Value = receiveRegisterBytes[3];
+  uint8_t iRXBnDLCValue = receiveRegisterBytes[4];
 
-  uint32_t idA = ((readRegister(REG_RXBnSIDH(n)) << 3) & 0x07f8) |
-                 ((readRegister(REG_RXBnSIDL(n)) >> 5) & 0x07);
+  _rxExtended = ((iRXBnSIDLValue) & FLAG_IDE) ? true : false;
+
+  uint32_t idA = ((iRXBnSIDHValue << 3) & 0x07f8) |
+                 ((iRXBnSIDLValue >> 5) & 0x07);
   if (_rxExtended) {
     uint32_t idB =
-        (((uint32_t)(readRegister(REG_RXBnSIDL(n)) & 0x03) << 16) & 0x30000) |
-        ((readRegister(REG_RXBnEID8(n)) << 8) & 0xff00) |
-        readRegister(REG_RXBnEID0(n));
+        ((((uint32_t)(iRXBnSIDLValue) & 0x03) << 16) & 0x30000) |
+        ((iRXBnEID8Value << 8) & 0xff00) |
+        iRXBnEID0Value;
 
     _rxId = (idA << 18) | idB;
-    _rxRtr = (readRegister(REG_RXBnDLC(n)) & FLAG_RTR) ? true : false;
+    _rxRtr = (iRXBnDLCValue & FLAG_RTR) ? true : false;
   } else {
     _rxId = idA;
-    _rxRtr = (readRegister(REG_RXBnSIDL(n)) & FLAG_SRR) ? true : false;
+    _rxRtr = (iRXBnSIDLValue & FLAG_SRR) ? true : false;
   }
-  _rxDlc = readRegister(REG_RXBnDLC(n)) & 0x0f;
+  _rxDlc = iRXBnDLCValue & 0x0f;
   _rxIndex = 0;
 
   if (_rxRtr) {
@@ -249,7 +257,7 @@ int Adafruit_MCP2515::parsePacket() {
     _rxLength = _rxDlc;
 
     for (int i = 0; i < _rxLength; i++) {
-      _rxData[i] = readRegister(REG_RXBnD0(n) + i);
+      _rxData[i] = receiveRegisterBytes[5+i];
     }
   }
 
@@ -258,7 +266,7 @@ int Adafruit_MCP2515::parsePacket() {
   return _rxDlc;
 }
 
-void Adafruit_MCP2515::onReceive(int intPin, void (*callback)(int)) {
+void KISPE_MCP2515::onReceive(int intPin, void (*callback)(int)) {
   CANControllerClass::onReceive(callback);
 
   pinMode(intPin, INPUT);
@@ -268,7 +276,7 @@ void Adafruit_MCP2515::onReceive(int intPin, void (*callback)(int)) {
     SPI.usingInterrupt(digitalPinToInterrupt(intPin));
 #endif
     attachInterrupt(digitalPinToInterrupt(intPin),
-                    Adafruit_MCP2515::onInterrupt, LOW);
+                    KISPE_MCP2515::onInterrupt, LOW);
   } else {
     detachInterrupt(digitalPinToInterrupt(intPin));
 #ifdef SPI_HAS_NOTUSINGINTERRUPT
@@ -277,7 +285,7 @@ void Adafruit_MCP2515::onReceive(int intPin, void (*callback)(int)) {
   }
 }
 
-int Adafruit_MCP2515::filter(int id, int mask) {
+int KISPE_MCP2515::filter(int id, int mask) {
   id &= 0x7ff;
   mask &= 0x7ff;
 
@@ -314,7 +322,7 @@ int Adafruit_MCP2515::filter(int id, int mask) {
   return 1;
 }
 
-int Adafruit_MCP2515::filterExtended(long id, long mask) {
+int KISPE_MCP2515::filterExtended(long id, long mask) {
   id &= 0x1FFFFFFF;
   mask &= 0x1FFFFFFF;
 
@@ -353,7 +361,7 @@ int Adafruit_MCP2515::filterExtended(long id, long mask) {
   return 1;
 }
 
-int Adafruit_MCP2515::observe() {
+int KISPE_MCP2515::observe() {
   writeRegister(REG_CANCTRL, 0x80);
   if (readRegister(REG_CANCTRL) != 0x80) {
     return 0;
@@ -362,7 +370,7 @@ int Adafruit_MCP2515::observe() {
   return 1;
 }
 
-int Adafruit_MCP2515::loopback() {
+int KISPE_MCP2515::loopback() {
   writeRegister(REG_CANCTRL, 0x40);
   if (readRegister(REG_CANCTRL) != 0x40) {
     return 0;
@@ -371,7 +379,7 @@ int Adafruit_MCP2515::loopback() {
   return 1;
 }
 
-int Adafruit_MCP2515::sleep() {
+int KISPE_MCP2515::sleep() {
   writeRegister(REG_CANCTRL, 0x01);
   if (readRegister(REG_CANCTRL) != 0x01) {
     return 0;
@@ -380,7 +388,7 @@ int Adafruit_MCP2515::sleep() {
   return 1;
 }
 
-int Adafruit_MCP2515::wakeup() {
+int KISPE_MCP2515::wakeup() {
   writeRegister(REG_CANCTRL, 0x00);
   if (readRegister(REG_CANCTRL) != 0x00) {
     return 0;
@@ -389,11 +397,11 @@ int Adafruit_MCP2515::wakeup() {
   return 1;
 }
 
-void Adafruit_MCP2515::setClockFrequency(long clockFrequency) {
+void KISPE_MCP2515::setClockFrequency(long clockFrequency) {
   _clockFrequency = clockFrequency;
 }
 
-void Adafruit_MCP2515::dumpRegisters(Stream &out) {
+void KISPE_MCP2515::dumpRegisters(Stream &out) {
   for (int i = 0; i < 128; i++) {
     byte b = readRegister(i);
 
@@ -410,14 +418,14 @@ void Adafruit_MCP2515::dumpRegisters(Stream &out) {
   }
 }
 
-void Adafruit_MCP2515::reset() {
+void KISPE_MCP2515::reset() {
   uint8_t buffer[1] = {0xC0};
   spi_dev->write(buffer, 1);
 
   delayMicroseconds(10);
 }
 
-void Adafruit_MCP2515::handleInterrupt() {
+void KISPE_MCP2515::handleInterrupt() {
   if (readRegister(REG_CANINTF) == 0) {
     return;
   }
@@ -427,23 +435,28 @@ void Adafruit_MCP2515::handleInterrupt() {
   }
 }
 
-uint8_t Adafruit_MCP2515::readRegister(uint8_t address) {
+uint8_t KISPE_MCP2515::readRegister(uint8_t address) {
   uint8_t buffer[2] = {0x03, address};
   spi_dev->write_then_read(buffer, 2, buffer, 1);
   return buffer[0];
 }
 
-void Adafruit_MCP2515::modifyRegister(uint8_t address, uint8_t mask,
+void KISPE_MCP2515::readAllReceiveRegisters(uint8_t address, uint8_t* receiveBuffer) {
+  uint8_t sendBuffer[2] = {0x03, address};
+  spi_dev->write_then_read(sendBuffer, 2, receiveBuffer, 13);
+}
+
+void KISPE_MCP2515::modifyRegister(uint8_t address, uint8_t mask,
                                       uint8_t value) {
   uint8_t buffer[4] = {0x05, address, mask, value};
   spi_dev->write(buffer, 4);
 }
 
-void Adafruit_MCP2515::writeRegister(uint8_t address, uint8_t value) {
+void KISPE_MCP2515::writeRegister(uint8_t address, uint8_t value) {
   uint8_t buffer[3] = {0x02, address, value};
   spi_dev->write(buffer, 3);
 }
 
-void Adafruit_MCP2515::onInterrupt() { instance->handleInterrupt(); }
+void KISPE_MCP2515::onInterrupt() { instance->handleInterrupt(); }
 
-Adafruit_MCP2515 *Adafruit_MCP2515::instance;
+KISPE_MCP2515 *KISPE_MCP2515::instance;

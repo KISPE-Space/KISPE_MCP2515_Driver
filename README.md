@@ -1,5 +1,3 @@
-# Adafruit MCP2515 Library
+# KISPE MCP2515 Driver Library
 
-This is an Arduino library for the Adafruit MCP2515 FeatherWing.
-
-* http://www.adafruit.com/product/5709
+This is an Arduino library for the MCP2515 CAN Controller. Based on the Adafruit MCP2515 Library with greatly improved efficiency of parsing a packet. Adafruit MCP2515 Library: https://github.com/adafruit/Adafruit_MCP2515
