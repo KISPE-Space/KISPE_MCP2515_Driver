@@ -2,7 +2,7 @@
  * Adafruit MCP2515 FeatherWing CAN Sender Example
  */
 
-#include <Adafruit_MCP2515.h>
+#include <KISPE_MCP2515.h>
 
 #ifdef ESP8266
    #define CS_PIN    2
@@ -30,7 +30,7 @@
 // Set CAN bus baud rate
 #define CAN_BAUDRATE (250000)
 
-Adafruit_MCP2515 mcp(CS_PIN);
+KISPE_MCP2515 mcp(CS_PIN);
 
 void setup() {
   Serial.begin(115200);

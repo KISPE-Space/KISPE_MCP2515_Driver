@@ -4,7 +4,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full
 // license information.
 
-#ifndef __ADAFRUIT_MCP2515_H__
+#ifndef __KISPE_MCP2515_H__
 #define __KISPE_MCP2515_H__
 
 #include <Adafruit_SPIDevice.h>
