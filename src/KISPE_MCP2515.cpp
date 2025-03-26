@@ -252,7 +252,7 @@ int KISPE_MCP2515::parsePacket() {
   _rxIndex = 0;
 
   if (_rxRtr) {
-    _rxLength = 0;
+    _rxLength = 255;
   } else {
     _rxLength = _rxDlc;
 
@@ -430,7 +430,7 @@ void KISPE_MCP2515::handleInterrupt() {
     return;
   }
 
-  while (parsePacket()) {
+  while (parsePacket() != 255) {
     _onReceive(available());
   }
 }
