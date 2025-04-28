@@ -426,12 +426,12 @@ void KISPE_MCP2515::reset() {
 }
 
 void KISPE_MCP2515::handleInterrupt() {
-  if (readRegister(REG_CANINTF) == 0) {
-    return;
-  }
-
-  while (parsePacket() != 255) {
-    _onReceive(available());
+  // keep reading frames while either RX buffer has its interrupt flag set
+  while (readRegister(REG_CANINTF) &
+         (FLAG_RXnIF(0) | FLAG_RXnIF(1)))         // <- stop when both are 0
+  {
+    parsePacket();               // pulls one frame out and clears the flag
+    _onReceive(available());     // user callback (DLC may be 0 – that’s OK)
   }
 }
 
